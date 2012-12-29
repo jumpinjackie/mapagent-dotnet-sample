@@ -15,6 +15,8 @@ namespace MyCustomMapAgentHandler
     {
         public void ProcessRequest(HttpContext context)
         {
+            //Change to the webconfig.ini of your MGOS installation if you're using a non-standard installation
+            //Initialization is a one-time event. Subsequent calls will return immediately
             MapGuideApi.MgInitializeWebTier("C:\\Program Files\\OSGeo\\MapGuide\\Web\\www\\webconfig.ini");
 
             //mapagent only accepts GET or POST, so reject unsupported methods
@@ -80,8 +82,11 @@ namespace MyCustomMapAgentHandler
             }
         }
 
-        private bool ParseAuthenticationHeader(MgHttpRequestParam param, HttpContext context)
+        private static bool ParseAuthenticationHeader(MgHttpRequestParam param, HttpContext context)
         {
+            //This method decodes and extracts the username and password from the http authentication
+            //header (if it exists) and packs the values into the MgHttpRequestParam object if they
+            //exist
             String auth = context.Request.Headers["authorization"];
             if (auth != null && auth.Length > 6)
             {
@@ -107,6 +112,7 @@ namespace MyCustomMapAgentHandler
         private static void HandleMgHttpError(MgHttpResult result, HttpContext context)
         {
             String statusMessage = result.GetHttpStatusMessage();
+            //These are 401-class errors
             if (statusMessage.Equals("MgAuthenticationFailedException") || statusMessage.Equals("MgUnauthorizedAccessException"))
             {
                 HandleUnauthorized(context);
@@ -131,9 +137,11 @@ namespace MyCustomMapAgentHandler
         private static void SendRequest(MgHttpRequest request, HttpContext context)
         {
             MgHttpRequestParam param = request.GetRequestParam();
+            //This next line does all the grunt work. It's why you never have to actually set up a 
+            //MgSiteConnection/MgResourceService/MgFeatureService and do all this stuff yourself
             MgHttpResponse response = request.Execute();
-            MgHttpResult result = response.GetResult();
 
+            MgHttpResult result = response.GetResult();
             context.Response.StatusCode = result.GetStatusCode();
             if (context.Response.StatusCode == 200)
             {
@@ -144,6 +152,8 @@ namespace MyCustomMapAgentHandler
                 if (resultObj != null)
                 {
                     context.Response.ContentType = result.GetResultContentType();
+
+                    //Most of the applicable types have logic to return their content as XML in the form of a MgByteReader
                     MgByteReader outputReader = null;
                     if (resultObj is MgByteReader)
                     {
@@ -152,16 +162,34 @@ namespace MyCustomMapAgentHandler
                     }
                     else if (resultObj is MgFeatureReader)
                     {
+                        //NOTE: This code path is not actually reached in MGOS 2.4 and if this code path ever
+                        //does get reached, calling ToXml() on it is a potentially memory expensive operation.
+                        //
+                        //But we're doing this because this is how the official mapagent handler does it
+                        //
+                        //RFC 130 (http://trac.osgeo.org/mapguide/wiki/MapGuideRfc130) will hopefully address this problem
                         outputReader = ((MgFeatureReader)resultObj).ToXml();
                         OutputReaderContent(context, outputReader);
                     }
                     else if (resultObj is MgSqlDataReader)
                     {
+                        //NOTE: This code path is not actually reached in MGOS 2.4 and if this code path ever
+                        //does get reached, calling ToXml() on it is a potentially memory expensive operation.
+                        //
+                        //But we're doing this because this is how the official mapagent handler does it
+                        //
+                        //RFC 130 (http://trac.osgeo.org/mapguide/wiki/MapGuideRfc130) will hopefully address this problem
                         outputReader = ((MgSqlDataReader)resultObj).ToXml();
                         OutputReaderContent(context, outputReader);
                     }
                     else if (resultObj is MgDataReader)
                     {
+                        //NOTE: This code path is not actually reached in MGOS 2.4 and if this code path ever
+                        //does get reached, calling ToXml() on it is a potentially memory expensive operation.
+                        //
+                        //But we're doing this because this is how the official mapagent handler does it
+                        //
+                        //RFC 130 (http://trac.osgeo.org/mapguide/wiki/MapGuideRfc130) will hopefully address this problem
                         outputReader = ((MgDataReader)resultObj).ToXml();
                         OutputReaderContent(context, outputReader);
                     }
@@ -192,7 +220,7 @@ namespace MyCustomMapAgentHandler
                 }
                 else
                 {
-                    //The operation may not return any content at all
+                    //The operation may not return any content at all, so we do nothing
                 }
             }
             else
